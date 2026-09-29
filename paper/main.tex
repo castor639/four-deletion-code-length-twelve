@@ -1,0 +1,476 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1.05in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage[hidelinks]{hyperref}
+\usepackage[nameinlink,noabbrev]{cleveref}
+\setlength{\emergencystretch}{2em}
+
+\definecolor{codeblue}{RGB}{31,78,121}
+\definecolor{codegray}{RGB}{82,82,82}
+\lstdefinelanguage{Lean}{
+  morekeywords={abbrev,def,theorem,lemma,namespace,end,import,where,if,then,else,
+    let,in,match,with,fun,forall,exists,by,exact,refine,have,show,from,calc,
+    unfold,rw,simp,simpa,apply,intro,rintro,constructor},
+  sensitive=true,
+  morecomment=[l]{--},
+  morecomment=[s]{/-}{-/},
+  morestring=[b]"
+}
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{codeblue}\bfseries,
+  commentstyle=\color{codegray}\itshape,
+  breaklines=true,
+  columns=fullflexible,
+  frame=single,
+  rulecolor=\color{black!15},
+  xleftmargin=0.4em,
+  xrightmargin=0.4em,
+  literate={∧}{{$\land$}}1 {¬}{{$\neg$}}1 {∃}{{$\exists$}}1 {→}{{$\to$}}1
+}
+
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{remark}[theorem]{Remark}
+
+\newcommand{\bits}{\{0,1\}}
+\newcommand{\D}{\mathcal{D}}
+\newcommand{\C}{\mathcal{C}}
+\newcommand{\K}{\mathcal{K}}
+\newcommand{\lcs}{\operatorname{LCS}}
+
+\title{\bfseries The Largest Binary Four-Deletion-Correcting\\
+Code of Length Twelve}
+\author{Anonymous}
+\date{September 28, 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+A binary code of length $n$ corrects $t$ deletions when no two codewords
+share a subsequence of length $n-t$.  Let $L_2(n,t)$ be the largest size of
+such a code.  For length twelve and four deletions, Kolev's 2016 table
+records $6\leq L_2(12,4)\leq10$, and a 2008 table of variable-length
+insertion/deletion codes by Baker, Flack, and Houghten implies
+$L_2(12,4)\leq7$.  We prove
+\[
+  L_2(12,4)=6.
+\]
+A six-word code gives the lower bound.  For the upper bound we construct an
+exact weighted-packing certificate: 117 nonzero weights on length-eight
+descendant rows and 20 weighted cliques of the conflict graph.  Each of the
+4,096 binary words of length twelve receives weight at least one, and the
+weights sum to $6.999616<7$, so no code has seven words.  A standard-library
+Python program checks the certificate in integer arithmetic.  A Lean~4
+development proves the weighted-sum argument and checks the certificate data.
+\end{abstract}
+
+\section{Introduction}
+
+A deletion channel drops symbols and does not tell the receiver where.
+Levenshtein founded the theory of codes that survive such errors
+\cite{levenshtein1966binary}.  A deletion shifts every later symbol, so the
+Hamming-distance tools of classical coding theory do not apply, and the exact
+extremal numbers remain unknown even for short binary words.
+
+The finite values of $L_2(n,t)$ have a short history.  Landjev and Haralambiev
+tabulated lower and upper bounds for $t=2,3,4,5$ in 2007
+\cite{landjev2007multiple}; at $(n,t)=(12,4)$ their tables give
+$5\leq L_2(12,4)\leq10$.  Kolev's 2016 table raises the lower end to six and
+credits that value to a 2015 Sofia University master's thesis
+\cite[Table~1]{kolev2016optimal}, \cite{landgev2015thesis}.  A sharper upper bound follows from a
+neighbouring problem.  Baker, Flack, and Houghten computed optimal
+variable-length insertion/deletion codes, in which $n$ is the length of the
+longest codeword, and their table lists $D_2(12,10)=7$
+\cite{baker2008variable,houghtenTable}.  Two words of length twelve are at
+insertion/deletion distance $24-2\lcs(x,y)$, so a four-deletion-correcting
+code of length twelve has minimum distance at least ten and counts as a
+variable-length code.  Hence $L_2(12,4)\leq7$, although no fixed-length table
+records this.  Recent computational work concentrates on
+fewer deletions: Nakasho, Hagiwara, Anderson, and Nation proved
+$L_2(11,1)=172$ with integer programming \cite{nakasho2023tight}, and Weindel
+and Heckel tabulate bounds for two and three deletions up to length eighteen
+\cite{weindel2026llm}.  Neither work treats four deletions.  \Cref{tab:history} summarizes the record at $(12,4)$.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}lcc@{}}
+\toprule
+Source & Lower bound & Upper bound\\
+\midrule
+Landjev and Haralambiev (2007) \cite{landjev2007multiple} & 5 & 10\\
+Baker, Flack, and Houghten (2008), via $D_2(12,10)$ \cite{baker2008variable} & & 7\\
+Kolev (2016) \cite{kolev2016optimal} & 6 & 10\\
+This paper & 6 & \textbf{6}\\
+\bottomrule
+\end{tabular}
+\caption{Published bounds on $L_2(12,4)$.}
+\label{tab:history}
+\end{table}
+
+\begin{theorem}[Main theorem]\label{thm:intro}
+The largest binary code of length twelve that corrects four deletions has six
+codewords.  Equivalently, among any seven binary words of length twelve, some
+two share a common subsequence of length eight.
+\end{theorem}
+
+The six-word code in \cref{sec:lower} reproduces the known lower bound.  The
+new content is the upper bound: seven codewords cannot coexist, which improves
+the implied bound of seven by one.
+The argument has three parts.
+\begin{enumerate}[leftmargin=2.2em]
+  \item A weighted-packing lemma (\cref{lem:weighted}) combines the standard
+        descendant-row constraints with inequalities from cliques of the
+        conflict graph.
+  \item An explicit certificate (\cref{sec:certificate}) supplies
+        nonnegative integer weights whose normalized total is $6.999616$.
+  \item Two independent checkers, a standard-library Python program and a
+        Lean~4 development, verify every coefficient, coverage inequality,
+        and clique pair.
+\end{enumerate}
+
+We found the certificate with floating-point linear programming, but the
+theorem depends only on the exported integers and one weighted sum.  The
+proof inherits nothing from the solver.
+
+\section{Definitions and the conflict hypergraph}
+
+Let $[q]=\{0,1,\dots,q-1\}$.  For $x=x_1x_2\cdots x_n\in[q]^n$ and
+$0\leq t<n$, define
+\[
+  \D_t(x)
+  =\bigl\{x_{i_1}x_{i_2}\cdots x_{i_{n-t}}:
+      1\leq i_1<i_2<\cdots<i_{n-t}\leq n\bigr\}.
+\]
+Different choices of deleted positions can produce the same word; that word
+counts once in $\D_t(x)$.
+
+\begin{definition}
+A code $\C\subseteq[q]^n$ corrects $t$ deletions if
+\[
+  \D_t(x)\cap\D_t(y)=\varnothing
+  \qquad\text{for all distinct }x,y\in\C.
+\]
+Let $L_q(n,t)$ denote the maximum cardinality of such a code.
+\end{definition}
+
+Some authors write $A_q(n,t)$ for the same quantity.  We follow the notation
+of the finite tables in \cite{landjev2007multiple,kolev2016optimal}.
+
+Fix $(q,n,t)$ and form a hypergraph on the vertex set $[q]^n$.  Each
+$d\in[q]^{n-t}$ indexes a row
+\[
+  R_d=\{x\in[q]^n:d\in\D_t(x)\}.
+\]
+A deletion-correcting code meets each $R_d$ in at most one vertex.  This
+set-packing formulation underlies the non-asymptotic upper bounds of Kulkarni
+and Kiyavash \cite{kulkarni2013nonasymptotic}.
+
+The \emph{conflict graph} $G$ has vertex set $[q]^n$, with two distinct words
+adjacent when they share a deletion descendant.  Codes correcting $t$
+deletions are the independent sets of $G$, so a code meets any clique
+$K\subseteq V(G)$ in at most one word.
+
+For equal-length words $x,y$, let $\lcs(x,y)$ be the length of a longest
+common subsequence.
+
+\begin{lemma}\label{lem:lcs}
+For $x,y\in[q]^n$, the sets $\D_t(x)$ and $\D_t(y)$ intersect if and only if
+$\lcs(x,y)\geq n-t$.
+\end{lemma}
+
+\begin{proof}
+A common descendant is a common subsequence of length $n-t$.  Conversely, a
+common subsequence of length at least $n-t$ contains one of length exactly
+$n-t$, and that word lies in both descendant sets.
+\end{proof}
+
+\section{A code of size six}\label{sec:lower}
+
+Consider the six binary words
+\begin{equation}\label{eq:codebook}
+\begin{split}
+\C_0=\{&000000000000,\quad 000011111110,\quad 010101010101,\\
+       &101111100000,\quad 110000000111,\quad 111111111111\}.
+\end{split}
+\end{equation}
+Their pairwise longest-common-subsequence lengths, in the order listed, are:
+
+\begin{center}
+\begin{tabular}{c@{\qquad}rrrrrr}
+\toprule
+ & 1 & 2 & 3 & 4 & 5 & 6\\
+\midrule
+1 & 12 & 5 & 6 & 6 & 7 & 0\\
+2 & 5 & 12 & 7 & 7 & 7 & 7\\
+3 & 6 & 7 & 12 & 7 & 7 & 6\\
+4 & 6 & 7 & 7 & 12 & 7 & 6\\
+5 & 7 & 7 & 7 & 7 & 12 & 5\\
+6 & 0 & 7 & 6 & 6 & 5 & 12\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Each off-diagonal entry is at most $7<12-4$, so by \cref{lem:lcs} the
+four-deletion descendant sets are pairwise disjoint.
+
+\begin{proposition}\label{prop:lower}
+$L_2(12,4)\geq6$.
+\end{proposition}
+
+\begin{proof}
+The six distinct words in \eqref{eq:codebook} form a four-deletion-correcting
+code by the table above.
+\end{proof}
+
+The released checker confirms this claim two ways.  It enumerates the
+four-deletion descendants of each word by keep/delete recursion, and it
+computes all 15 LCS values by dynamic programming.  The six descendant sets
+contain 198 distinct words in total, with no collision between codewords.
+
+\section{A weighted certificate lemma}
+
+The upper bound puts nonnegative weights on two families of packing
+inequalities.  We state the argument in the form the certificate uses.
+
+\begin{lemma}[Weighted descendant-and-clique bound]\label{lem:weighted}
+Fix $q,n,t$.  Let $a_d\geq0$ for $d\in[q]^{n-t}$.  Let
+$K_1,\dots,K_m$ be cliques in the conflict graph, with weights $b_i\geq0$.
+Suppose each $x\in[q]^n$ satisfies
+\begin{equation}\label{eq:coverage}
+  \sum_{d\in\D_t(x)}a_d+\sum_{i:x\in K_i}b_i\geq1.
+\end{equation}
+Then each $t$-deletion-correcting code $\C\subseteq[q]^n$ satisfies
+\begin{equation}\label{eq:weightedbound}
+  |\C|\leq \sum_{d\in[q]^{n-t}}a_d+\sum_{i=1}^m b_i.
+\end{equation}
+\end{lemma}
+
+\begin{proof}
+Sum \eqref{eq:coverage} over $x\in\C$ and exchange the order of summation:
+\begin{align*}
+|\C|
+&\leq \sum_{x\in\C}\left(
+       \sum_{d\in\D_t(x)}a_d+\sum_{i:x\in K_i}b_i\right)\\
+&=\sum_d a_d|\C\cap R_d|+\sum_i b_i|\C\cap K_i|.
+\end{align*}
+The code meets each row $R_d$ and each clique $K_i$ in at most one word.
+Nonnegativity of the weights gives \eqref{eq:weightedbound}.
+\end{proof}
+
+The clique terms carry the proof.  With weights on the 256 descendant rows
+alone, the best bound this lemma can give is the optimum of the fractional
+packing LP, which HiGHS reports as about $7.054$.  That yields only
+$L_2(12,4)\leq7$, the same bound the variable-length table implies.  Adding 20 cliques pushes the bound below seven,
+and each clique remains easy to check: every pair of its words must share a
+length-eight subsequence.
+
+\section{The exact certificate}\label{sec:certificate}
+
+Set $M=1{,}000{,}000$.  The certificate stores integers $A_d\geq0$ for
+$d\in\bits^8$ and $B_i\geq0$ for 20 conflict cliques $K_i$, and sets
+\[
+  a_d=A_d/M,\qquad b_i=B_i/M.
+\]
+The JSON file omits zero descendant weights.  The checker verifies the
+following facts in exact arithmetic.
+
+\begin{center}
+\begin{tabular}{@{}lr@{}}
+\toprule
+Quantity & Verified value\\
+\midrule
+Length-12 words checked & 4,096\\
+Possible length-8 descendants & 256\\
+Nonzero descendant weights & 117\\
+Conflict cliques & 20\\
+Clique sizes & 62 to 94\\
+Clique pairs checked & 61,263\\
+Minimum integer word coverage & 1,000,000\\
+Sum of all integer weights & 6,999,616\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+So for each $x\in\bits^{12}$,
+\begin{equation}\label{eq:integercoverage}
+  \sum_{d\in\D_4(x)}A_d+\sum_{i:x\in K_i}B_i\geq M,
+\end{equation}
+while
+\begin{equation}\label{eq:integerobjective}
+  \sum_d A_d+\sum_i B_i=6{,}999{,}616<7M.
+\end{equation}
+
+\begin{proposition}\label{prop:upper}
+$L_2(12,4)\leq6$.
+\end{proposition}
+
+\begin{proof}
+Divide \eqref{eq:integercoverage} and \eqref{eq:integerobjective} by $M$ and
+apply \cref{lem:weighted}.  Each valid code $\C$ satisfies
+\[
+  |\C|\leq\frac{6{,}999{,}616}{1{,}000{,}000}=6.999616<7.
+\]
+Since $|\C|$ is an integer, $|\C|\leq6$.
+\end{proof}
+
+\Cref{prop:lower,prop:upper} together prove the main result.
+
+\begin{theorem}\label{thm:main}
+In the ordinary ordered binary deletion model,
+\[
+  \boxed{L_2(12,4)=6}.
+\]
+\end{theorem}
+
+\section{Finding and checking the certificate}
+
+We separate the search, which no one needs to trust, from the small
+computation that the proof relies on.
+
+\subsection{Search}
+
+We treated the 4,096 words of length twelve as vertices of the conflict graph
+and solved the linear-programming relaxation of the 256 descendant-row packing
+constraints with HiGHS.  While the LP optimum stayed at seven or above, we
+solved an integer maximum-weight clique problem on the support of the current
+LP solution to find a violated clique inequality, then added it as a cut.
+After 20 cuts the optimum fell below seven.  We multiplied the nonnegative dual
+multipliers by $M$, rounded each one up, and kept the rounded vector only after
+the exact coverage and total checks passed.  \Cref{thm:main} uses none of the
+floating-point output.
+
+\subsection{Standalone checker}
+
+The verifier is a Python program that imports only the standard library.
+Given the JSON certificate, it checks that:
+\begin{enumerate}[leftmargin=2.2em]
+  \item the declared model and parameters equal $(q,n,t)=(2,12,4)$;
+  \item each word and descendant is a fixed-width binary string;
+  \item each clique lists distinct words, and all 61,263 within-clique pairs
+        share a four-deletion descendant, reconstructed from scratch;
+  \item each of the 4,096 words satisfies \eqref{eq:integercoverage};
+  \item the stored total equals 6,999,616, below $7M$; and
+  \item the certificate bytes match the published SHA-256 digest.
+\end{enumerate}
+
+A separate program, independent of the search code, checks the six-word code
+through both descendant-set disjointness and the LCS criterion.  Mutation
+tests lower a necessary weight and corrupt a clique, and the verifier rejects
+both.
+
+\begin{center}
+\begin{tabular}{@{}p{0.28\linewidth}p{0.64\linewidth}@{}}
+\toprule
+Artifact & SHA-256\\
+\midrule
+Codebook &
+\texttt{\footnotesize 5dee9d5e15202ebe6ecff0fe0f35e704}\newline
+\texttt{\footnotesize e3b8d957967a9116becdeaa6cc1c023f}\\[0.4em]
+Upper certificate &
+\texttt{\footnotesize d9c8b720d112957250c3c06ec786634a}\newline
+\texttt{\footnotesize 573d6e1f78a449f2b2da5a829cf7fc82}\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Lean 4 formalization}
+
+The Lean development defines the ordered deletion model, imports the
+certificate as transparent data, checks its finite facts, and proves the
+weighted-sum argument.  Words of length twelve are elements of
+\lstinline|Fin 4096| and descendants are elements of \lstinline|Fin 256|.
+The predicate \lstinline|hasDescendant| compares fixed-width bit lists with
+\lstinline|List.isSublist|, which tests for a subsequence.  A family
+\lstinline|code : Fin k -> Word| is \lstinline|ValidFamily| when it is injective
+and no two of its words share a length-eight descendant.
+
+The main theorem reads:
+\begin{lstlisting}[language=Lean]
+theorem binary_length12_four_deletion_exact :
+    (lowerCode.Nodup /\ lowerCode.length = 6 /\
+      explicitCodeValid lowerCode = true) /\
+    Not (Exists fun code : Fin 7 -> Word => ValidFamily code)
+\end{lstlisting}
+
+The second conjunct excludes every injective labelled family of seven
+compatible words.  A code with seven or more words contains such a family, so
+the two conjuncts together state \cref{thm:main}.  The proof isolates four
+finite checks from the structural argument:
+\begin{itemize}[leftmargin=2.2em]
+  \item validity and size of the six-word code;
+  \item validity of the 20 conflict cliques;
+  \item coverage of all 4,096 words; and
+  \item the exact total-weight inequality.
+\end{itemize}
+
+The development contains no \lstinline|sorry|, no \lstinline|admit|, and no
+project-local axiom.  Its four finite checks use \lstinline|native_decide|, so
+the Lean proof trusts Lean's compiler and runtime in addition to its kernel;
+\lstinline|#print axioms| lists exactly these four leaves beyond the standard
+axioms.  Replacing them with kernel-checked proof terms would remove that
+dependence.  The Python checker does not share it.
+
+\section{Reproducibility}
+
+From the \texttt{formalization} directory of the accompanying repository, run:
+\begin{lstlisting}
+python3 research/deletion_code_attempt/verify_code.py
+python3 research/deletion_code_attempt/proof/verify_upper_certificate.py
+python3 research/deletion_code_attempt/proof/test_upper_certificate_mutations.py
+lake build DeletionCodes.Conjectures.DeletionCode124
+lake build
+\end{lstlisting}
+
+The Python programs end with these markers:
+\begin{itemize}[leftmargin=2.2em]
+  \item \texttt{VERIFICATION=PASS} for the six-word code;
+  \item \texttt{UPPER\_CERTIFICATE=PASS} for the upper certificate; and
+  \item \texttt{MUTATION\_AUDIT=PASS} for the mutation tests.
+\end{itemize}
+The Lean build prints the axioms of the main theorem, so a reader can inspect
+its trust boundary.
+
+\section{Concluding remarks}
+
+This paper settles one finite entry, not an asymptotic question.  A reader can
+check the whole proof: six lines give the construction, one weighted sum gives
+the upper bound, and a versioned certificate holds every finite fact, checked
+in both Python and Lean.  The same combination of descendant rows and clique
+cuts applies without change to other open entries.  The nearest are
+$6\leq L_2(13,4)\leq14$ and $7\leq L_2(14,4)\leq22$ in Kolev's table, which
+lie beyond the range of the variable-length tables.
+
+\paragraph{Literature search.}
+Searches through September 28, 2026 found the bounds in
+\cref{tab:history} and no source that states the exact value or an upper bound
+below seven.  Recent finite-length studies stop at three deletions, and
+arXiv listings from July through September 2026 contain no competing
+result.  We could not obtain the 2015 thesis that Kolev cites,
+and an unpublished result could exist.  The theorem and its certificate stand
+independent of any priority question.
+
+\paragraph{Use of AI tools.}
+The author used AI coding and reasoning assistants to write search code, the
+certificate checkers, the Lean formalization, and drafts of this manuscript.
+The author takes responsibility for the statements, the literature claims, the
+released artifacts, and the correctness of the paper.
+
+\bibliographystyle{alpha}
+\bibliography{references}
+
+\end{document}
